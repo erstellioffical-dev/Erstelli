@@ -14,7 +14,8 @@ const selectedIdeaBox=document.getElementById('selectedIdeaBox');
 const checkoutGoal=document.getElementById('checkoutGoal');
 const checkoutFormView=document.getElementById('checkoutFormView');
 const generatorView=document.getElementById('generatorView');
-const PURCHASE_STORAGE_KEY='erstelliActivePurchaseV43';
+const PURCHASE_STORAGE_KEY='erstelliActivePurchaseV48';
+const PAYMENT_DRAFT_KEY='erstelliPaymentDraftV48';
 let currentPrintPayload=null;
 
 function saveActivePurchase(data){
@@ -51,6 +52,9 @@ function openOrder(plan){
   planInput.value=plan;
   if(selectedIdea){selectedIdeaBox.hidden=false;const extra=[finderSnapshot.status&&('Status: '+finderSnapshot.status),finderSnapshot.occupation&&('Beruf: '+finderSnapshot.occupation),finderSnapshot.budget&&('Investition: '+finderSnapshot.budget),finderSnapshot.planUse&&('Verwendung: '+finderSnapshot.planUse)].filter(Boolean).join(' · ');selectedIdeaBox.textContent='Vorhaben: '+selectedIdea+(extra?' | '+extra:'')}else{selectedIdeaBox.hidden=true}
   checkoutGoal.value=finderSnapshot.vision||'';
+  const priceMatch=String(plan).replace(',','.').match(/(?:14\.99|9\.99|4\.99)/);
+  const payButton=document.getElementById('checkoutPayButton');
+  if(payButton) payButton.textContent=`Zahlungspflichtig bestellen${priceMatch?` – ${priceMatch[0].replace('.',',')} €`:''}`;
   const existing=loadActivePurchase();
   const samePlan=existing&&existing.plan===plan&&existing.goal===(finderSnapshot.vision||'');
   if(samePlan&&existing.html){restoreGeneratedPurchase(existing);}else{checkoutFormView.hidden=false;generatorView.hidden=true;}
@@ -224,19 +228,36 @@ document.getElementById('leadForm')?.addEventListener('submit',async e=>{
   const fd=Object.fromEntries(new FormData(form).entries());
   if(String(fd.name||'').trim().split(/\s+/).filter(Boolean).length<2){if(errorBox){errorBox.hidden=false;errorBox.textContent='Bitte gib deinen Vor- und Nachnamen ein.';}form.elements.name?.focus();return;}
   const draft={plan:planInput.value,customer:{name:fd.name,email:fd.email},goal:fd.goal||selectedIdea||'',profile:finderSnapshot,conversation:window.__blupiTranscript||[]};
-  checkoutFormView.hidden=true;generatorView.hidden=false;
+  const submitBtn=form.querySelector('button[type="submit"]');
+  const originalLabel=submitBtn?.textContent||'Zahlungspflichtig bestellen';
+  if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='Stripe Checkout wird geöffnet …';}
   try{
-    await startPaidGeneration({name:draft.customer.name,email:draft.customer.email,goal:draft.goal},'DEMO_BYPASS');
+    localStorage.setItem(PAYMENT_DRAFT_KEY,JSON.stringify({...draft,savedAt:Date.now()}));
+    const r=await fetch('/api/create-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...draft,provider:'stripe'})});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data.url)throw new Error(data.error||'Stripe Checkout konnte nicht gestartet werden.');
+    location.assign(data.url);
   }catch(err){
-    checkoutFormView.hidden=false;generatorView.hidden=true;
-    if(errorBox){errorBox.hidden=false;errorBox.textContent=err.message||'Demo-Erstellung konnte nicht gestartet werden.';}else alert(err.message);
+    if(submitBtn){submitBtn.disabled=false;submitBtn.textContent=originalLabel;}
+    if(errorBox){errorBox.hidden=false;errorBox.textContent=err.message||'Zahlung konnte nicht gestartet werden.';}else alert(err.message);
   }
 });
 
 async function resumePaidCheckout(){
   const q=new URLSearchParams(location.search), provider=q.get('payment_provider');
+  if(q.get('payment_cancelled')==='1'){
+    const raw=localStorage.getItem(PAYMENT_DRAFT_KEY);
+    if(raw){
+      try{
+        const draft=JSON.parse(raw); finderSnapshot=draft.profile||{}; finderCompleted=true; selectedIdea=draft.goal||'';
+        openOrder(draft.plan);
+        const box=document.getElementById('checkoutError'); if(box){box.hidden=false;box.textContent='Die Zahlung wurde abgebrochen. Es wurde nichts berechnet.';}
+      }catch{}
+    }
+    history.replaceState({},'',location.pathname+location.hash); return;
+  }
   if(!provider)return;
-  const raw=localStorage.getItem('blueprintPaymentDraft'); if(!raw)return;
+  const raw=localStorage.getItem(PAYMENT_DRAFT_KEY); if(!raw)return;
   let draft; try{draft=JSON.parse(raw)}catch{return}
   try{
     const payload=provider==='stripe'?{provider,sessionId:q.get('session_id')}:{provider,orderId:q.get('token')};
@@ -247,11 +268,11 @@ async function resumePaidCheckout(){
     modalPlan.textContent=draft.plan;planInput.value=draft.plan;checkoutGoal.value=draft.goal||'';checkoutFormView.hidden=true;generatorView.hidden=false;modal.classList.add('open');modal.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
     saveActivePurchase({plan:draft.plan,goal:draft.goal||'',email:draft.customer?.email||'',paymentToken:data.paymentToken||'',html:''});
     await startPaidGeneration({name:draft.customer?.name||'',email:draft.customer?.email||'',goal:draft.goal||''},data.paymentToken);
-    localStorage.removeItem('blueprintPaymentDraft');history.replaceState({},'',location.pathname+location.hash);
+    localStorage.removeItem(PAYMENT_DRAFT_KEY);history.replaceState({},'',location.pathname+location.hash);
   }catch(err){alert(err.message);}
 }
-// Testmodus V29: keine Zahlungs-Weiterleitung und keine Wiederaufnahme eines Checkouts.
-// resumePaidCheckout();
+// Live: nach erfolgreicher Stripe-Zahlung Checkout verifizieren und Erstellung fortsetzen.
+resumePaidCheckout();
 
 // V42: PDF wird aus den strukturierten Plandaten NEU aufgebaut.
 // Es wird bewusst NICHT mehr der Website-DOM geklont. Dadurch können weder
@@ -502,7 +523,7 @@ document.getElementById('printGeneratedPlan')?.addEventListener('click',async()=
     if(d.time==='20')score+=1;if(d.time==='full')score+=2;if(d.income==='5000')score+=1;if(d.income==='5000+')score+=2;
     const terms=['mitarbeiter','personal','team','standort','laden','kiosk','lager','maschinen','fuhrpark','mehrere standorte','franchise','investor','produktion','gastronomie','onlineshop','e-commerce','import','export','leasing','miete'];score+=terms.filter(x=>v.includes(x)).length;if(v.length>500)score+=1;
     const bank=['bank','funding','both'].includes(d.planUse);
-    if(budgetMax<=350)return {price:4.99,name:'Start',why:'Dein Investitionsrahmen ist klein. Deshalb bleibt der Plan bewusst bei 2,14,99 €, damit möglichst viel Geld für die Umsetzung übrig bleibt.',bank};
+    if(budgetMax<=350)return {price:4.99,name:'Start',why:'Dein Investitionsrahmen ist klein. Deshalb bleibt der Plan bewusst bei 4,99 €, damit möglichst viel Geld für die Umsetzung übrig bleibt.',bank};
     if(budgetMax<=2000)return {price:score>=4?9.99:4.99,name:score>=4?'Plus':'Start',why:score>=4?'Dein Vorhaben hat mehrere Bausteine, bleibt finanziell aber überschaubar. Dafür reicht der 9,99-€-Plan.':'Für deinen überschaubaren Start reicht der 4,99-€-Plan.',bank};
     return {price:score>=4?14.99:9.99,name:score>=4?'Pro':'Plus',why:score>=4?'Größerer Investitionsrahmen plus mehrere komplexe Bausteine: dafür ist die tiefste 14,99-€-Stufe sinnvoll.':'Trotz des größeren Budgets reicht für den beschriebenen Umfang die 9,99-€-Stufe.',bank};
   }
@@ -549,7 +570,7 @@ document.getElementById('printGeneratedPlan')?.addEventListener('click',async()=
   vision.addEventListener('input',()=>{visionCount.textContent=`${vision.value.length} / 2000`;tailor()});show();
 })();
 
-// Frag Erstelli V12 – echte KI über Backend, mit lokaler Fallback-Logik
+// Frag Erstelli V48 – Backend-Verbindung für Produktion und lokale Entwicklung
 (()=>{
   const launcher=document.getElementById('blupiLauncher'),panel=document.getElementById('blupiPanel'),close=document.getElementById('blupiClose'),form=document.getElementById('blupiForm'),input=document.getElementById('blupiInput'),messages=document.getElementById('blupiMessages'),toFinder=document.getElementById('blupiToFinder');
   const connectionLabel=document.getElementById('blupiConnection');
@@ -830,7 +851,7 @@ document.getElementById('printGeneratedPlan')?.addEventListener('click',async()=
     add(text,'user');transcript.push(text);window.__blupiTranscript=[...transcript];input.value='';
     const connected=await checkAIConnection();
     if(!connected){
-      add('Die echte KI ist gerade nicht verbunden. Öffne die Website über START_KI.bat bzw. http://localhost:8787 und prüfe, ob dein OpenAI-API-Key in der .env-Datei eingetragen ist. Ich gebe absichtlich keine lokale Ersatzantwort mehr aus, damit du sofort erkennst, ob wirklich die KI antwortet.','bot');
+      add('Erstelli ist gerade vorübergehend nicht erreichbar. Bitte versuche es in einem Moment erneut. Deine bisherigen Angaben bleiben erhalten.','bot');
       return;
     }
     const typing=add('Erstelli denkt mit …','bot typing');
@@ -861,7 +882,7 @@ document.getElementById('printGeneratedPlan')?.addEventListener('click',async()=
       typing.remove();
       liveAIConnected=false;
       if(connectionLabel)connectionLabel.textContent='vorübergehend nicht verfügbar';
-      add('Die KI-Anfrage ist fehlgeschlagen: '+String(err.message||err)+'. Es wird keine lokale Ersatzantwort verwendet.','bot');
+      add('Erstelli konnte die Anfrage gerade nicht verarbeiten. Bitte versuche es in einem Moment erneut. Deine bisherigen Angaben bleiben erhalten.','bot');
     }
   }
   messages.addEventListener('click',e=>{

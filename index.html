@@ -396,16 +396,16 @@
       </div>
       <div>
         <strong>Rechtliches</strong>
-        <a href="#" onclick="alert('Vor Livegang Impressum eintragen.'); return false;">Impressum</a>
-        <a href="#" onclick="alert('Vor Livegang Datenschutzerklärung eintragen.'); return false;">Datenschutz</a>
-        <a href="#" onclick="alert('Vor Livegang AGB/Widerruf für digitale Dienstleistungen prüfen.'); return false;">AGB & Widerruf</a>
+        <a href="/impressum.html">Impressum</a>
+        <a href="/datenschutz.html">Datenschutz</a>
+        <a href="/agb-widerruf.html">AGB & Widerruf</a>
       </div>
       <div>
         <strong>Kontakt</strong>
-        <a href="mailto:hallo@erstelli.de">hallo@erstelli.de</a>
+        <a href="mailto:erstellioffical@gmail.com">erstellioffical@gmail.com</a>
       </div>
     </div>
-    <div class="container copyright">© 2026 Erstelli. · <a href="#" class="legal-link">Impressum</a> · <a href="#" class="legal-link">Datenschutz</a> · <a href="#" class="legal-link">AGB & Widerruf</a></div>
+    <div class="container copyright">© 2026 Erstelli. · <a href="/impressum.html" class="legal-link">Impressum</a> · <a href="/datenschutz.html" class="legal-link">Datenschutz</a> · <a href="/agb-widerruf.html" class="legal-link">AGB & Widerruf</a></div>
   </footer>
 
   <div class="modal" id="orderModal" aria-hidden="true">
@@ -413,7 +413,7 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <button class="modal-close" aria-label="Schließen" data-close-modal>×</button>
       <div id="checkoutFormView">
-        <div class="eyebrow">DEMO · TESTLAUF</div>
+        <div class="eyebrow">SICHERER CHECKOUT</div>
         <h2 id="modalTitle">Businessplan starten</h2>
         <p class="modal-plan" id="modalPlan"></p>
         <div class="selected-idea-box" id="selectedIdeaBox" hidden></div>
@@ -424,9 +424,9 @@
           <input type="hidden" name="plan" id="planInput">
           <label class="demo-check"><input type="checkbox" name="digitalConsent" required><span>Ich stimme ausdrücklich zu, dass mit der Bereitstellung des digitalen Inhalts vor Ablauf der Widerrufsfrist begonnen wird. Mir ist bekannt, dass ich mit Beginn der Bereitstellung mein Widerrufsrecht verliere.</span></label>
           <div id="checkoutError" class="checkout-error" hidden></div>
-          <div class="demo-test-note"><strong>Testmodus aktiv</strong><span>Für diesen lokalen Test ist keine Zahlung nötig. Stripe und PayPal sind vorübergehend deaktiviert.</span></div>
-          <button class="btn btn-primary" type="submit">Businessplan in Demo erstellen</button>
-          <small>Erst wenn Finder, Name, gültige E-Mail, Vorhaben und Zustimmung vollständig sind, startet die Demo-Erstellung.</small>
+          <div class="demo-test-note payment-note"><strong>Sichere Zahlung über Stripe</strong><span>Nach erfolgreicher Zahlung wirst du automatisch zu Erstelli zurückgeleitet. Erst danach beginnt die Erstellung deines Businessplans.</span></div>
+          <button class="btn btn-primary" type="submit" id="checkoutPayButton">Zahlungspflichtig bestellen</button>
+          <small>Die Erstellung startet erst nach bestätigter Zahlung. Deine Paketwahl bleibt dabei verbindlich.</small>
         </form>
       </div>
       <div id="generatorView" class="generator-view" hidden>

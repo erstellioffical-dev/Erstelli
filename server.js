@@ -27,7 +27,9 @@ loadLocalEnv();
 
 const PORT = Number(process.env.PORT || 8787);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const DEMO_PAYMENT_BYPASS=String(process.env.DEMO_PAYMENT_BYPASS||'true').toLowerCase()==='true';
+const DEMO_PAYMENT_BYPASS=String(process.env.DEMO_PAYMENT_BYPASS||'false').toLowerCase()==='true';
+const IS_RAILWAY=Boolean(process.env.RAILWAY_ENVIRONMENT||process.env.RAILWAY_PROJECT_ID||process.env.RAILWAY_SERVICE_ID);
+const ALLOW_DEMO_BYPASS=DEMO_PAYMENT_BYPASS && !IS_RAILWAY;
 const ERSTELLI_MODEL = process.env.ERSTELLI_MODEL || process.env.BLUPI_MODEL || 'gpt-5.6-luna';
 const PLAN_MODEL = process.env.PLAN_MODEL || 'gpt-5.6-terra';
 const REVIEW_MODEL = process.env.REVIEW_MODEL || 'gpt-5.6-luna';
@@ -36,10 +38,13 @@ const FROM_EMAIL = process.env.FROM_EMAIL || '';
 const IMAGE_MODEL = process.env.IMAGE_MODEL || 'gpt-image-2';
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_PRICE_START = process.env.STRIPE_PRICE_START || '';
+const STRIPE_PRICE_PLUS = process.env.STRIPE_PRICE_PLUS || '';
+const STRIPE_PRICE_PRO = process.env.STRIPE_PRICE_PRO || '';
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || '';
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || '';
 const PAYPAL_ENV = process.env.PAYPAL_ENV || 'sandbox';
-const PAYMENT_SIGNING_SECRET = process.env.PAYMENT_SIGNING_SECRET || 'change-this-before-live';
+const PAYMENT_SIGNING_SECRET = process.env.PAYMENT_SIGNING_SECRET || (STRIPE_SECRET_KEY ? crypto.createHash('sha256').update(STRIPE_SECRET_KEY+'|erstelli-v48-payment-signing').digest('hex') : 'local-development-only');
 
 function json(res, status, data){
   res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
@@ -302,7 +307,7 @@ async function handleGenerate(req,res){
   const body=await readBody(req);
   const profile=body.profile||{};
   const paymentCheck=verifyPaymentToken(body.paymentToken);
-  const demoBypass=DEMO_PAYMENT_BYPASS && body.paymentToken==='DEMO_BYPASS';
+  const demoBypass=ALLOW_DEMO_BYPASS && body.paymentToken==='DEMO_BYPASS';
   if(!demoBypass && !paymentCheck.ok) return json(res,402,{error:'Zahlung wurde nicht bestätigt. Bitte zuerst den Checkout abschließen.'});
   const {price,name,pageTarget,depth,imageCount,tableCount,financeMode,financeLabel,wordTarget,minWords,maxWords,days}=planPrompt(body.plan,profile.planUse);
   const customerName=safe(body.customer?.name).trim();
@@ -316,6 +321,12 @@ async function handleGenerate(req,res){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) return json(res,400,{error:'Bitte eine gültige E-Mail-Adresse eingeben.'});
   if(goal.length<8) return json(res,400,{error:'Bitte das Vorhaben vollständig aus dem Finder übernehmen.'});
   const actualPrice=[4.99,9.99,14.99].includes(price)?price:4.99;
+  if(!demoBypass){
+    const paidPrice=Number(paymentCheck.data?.price);
+    const expectedHash=paymentDraftHash(body);
+    if(Math.abs(paidPrice-actualPrice)>0.001) return json(res,402,{error:'Die bestätigte Zahlung gehört zu einem anderen Erstelli-Paket.'});
+    if(!paymentCheck.data?.draftHash || paymentCheck.data.draftHash!==expectedHash) return json(res,402,{error:'Die Zahlungsbestätigung passt nicht zu dieser Bestellung. Bitte starte den Checkout erneut.'});
+  }
   const schema={
     type:'object',additionalProperties:false,
     properties:{
@@ -440,6 +451,33 @@ QUALITÄTSSTANDARD FÜR JEDES PAKET:
 }
 
 
+function stableObject(value){
+  if(Array.isArray(value)) return value.map(stableObject);
+  if(value && typeof value==='object') return Object.keys(value).sort().reduce((o,k)=>{o[k]=stableObject(value[k]);return o;},{});
+  return value;
+}
+function paymentDraftHash(body={}){
+  const payload={
+    plan:String(body.plan||''),
+    customer:{name:String(body.customer?.name||'').trim(),email:String(body.customer?.email||'').trim().toLowerCase()},
+    goal:String(body.goal||'').trim(),
+    profile:body.profile||{}
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(stableObject(payload))).digest('hex');
+}
+function stripePackage(plan=''){
+  const price=priceFromPlan(plan);
+  if(price===14.99)return {key:'pro',name:'Pro',price,priceId:STRIPE_PRICE_PRO};
+  if(price===9.99)return {key:'plus',name:'Plus',price,priceId:STRIPE_PRICE_PLUS};
+  return {key:'start',name:'Start',price:4.99,priceId:STRIPE_PRICE_START};
+}
+function publicBaseUrlFor(req){
+  if(PUBLIC_BASE_URL && !/^http:\/\/localhost(?::\d+)?$/i.test(PUBLIC_BASE_URL)) return PUBLIC_BASE_URL.replace(/\/$/,'');
+  const proto=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim() || (IS_RAILWAY?'https':'http');
+  const host=String(req.headers['x-forwarded-host']||req.headers.host||`localhost:${PORT}`).split(',')[0].trim();
+  return `${proto}://${host}`.replace(/\/$/,'');
+}
+
 function signPayment(payload){
   const raw=Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig=crypto.createHmac('sha256',PAYMENT_SIGNING_SECRET).update(raw).digest('base64url');
@@ -457,22 +495,44 @@ function verifyPaymentToken(token=''){
 }
 function priceFromPlan(plan=''){ return parsePlanPrice(plan); }
 function baseUrl(){return PUBLIC_BASE_URL.replace(/\/$/,'');}
-async function stripeCreate(body){
-  if(!STRIPE_SECRET_KEY) throw new Error('Stripe ist noch nicht konfiguriert. STRIPE_SECRET_KEY fehlt in .env.');
-  const price=priceFromPlan(body.plan), cents=Math.round(price*100);
+async function stripeCreate(req,body){
+  if(!STRIPE_SECRET_KEY) throw new Error('Stripe ist noch nicht konfiguriert.');
+  const pkg=stripePackage(body.plan);
+  if(!pkg.priceId) throw new Error(`Stripe-Preis für ${pkg.name} fehlt in der Server-Konfiguration.`);
+  const draftHash=paymentDraftHash(body);
+  const base=publicBaseUrlFor(req);
   const params=new URLSearchParams();
-  params.set('mode','payment'); params.set('success_url',`${baseUrl()}/?payment_provider=stripe&session_id={CHECKOUT_SESSION_ID}`); params.set('cancel_url',`${baseUrl()}/?payment_cancelled=1`);
+  params.set('mode','payment');
+  params.set('success_url',`${base}/?payment_provider=stripe&session_id={CHECKOUT_SESSION_ID}`);
+  params.set('cancel_url',`${base}/?payment_cancelled=1`);
   params.set('customer_email',String(body.customer?.email||''));
-  params.set('line_items[0][quantity]','1'); params.set('line_items[0][price_data][currency]','eur'); params.set('line_items[0][price_data][unit_amount]',String(cents));
-  params.set('line_items[0][price_data][product_data][name]',`Erstelli ${price.toFixed(2).replace('.',',')} € Businessplan`);
+  params.set('line_items[0][quantity]','1');
+  params.set('line_items[0][price]',pkg.priceId);
+  params.set('metadata[source]','erstelli');
+  params.set('metadata[package_key]',pkg.key);
+  params.set('metadata[package_price]',pkg.price.toFixed(2));
+  params.set('metadata[draft_hash]',draftHash);
+  params.set('payment_intent_data[metadata][source]','erstelli');
+  params.set('payment_intent_data[metadata][package_key]',pkg.key);
   const r=await fetch('https://api.stripe.com/v1/checkout/sessions',{method:'POST',headers:{Authorization:`Bearer ${STRIPE_SECRET_KEY}`,'Content-Type':'application/x-www-form-urlencoded'},body:params});
-  const data=await r.json(); if(!r.ok)throw new Error(data?.error?.message||'Stripe-Checkout konnte nicht erstellt werden.'); return data;
+  const data=await r.json();
+  if(!r.ok)throw new Error(data?.error?.message||'Stripe-Checkout konnte nicht erstellt werden.');
+  return data;
 }
 async function stripeVerify(sessionId){
   if(!STRIPE_SECRET_KEY)throw new Error('Stripe ist nicht konfiguriert.');
-  const r=await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,{headers:{Authorization:`Bearer ${STRIPE_SECRET_KEY}`}}); const d=await r.json();
+  if(!/^cs_(?:live|test)_/.test(String(sessionId||'')))throw new Error('Ungültige Stripe-Checkout-ID.');
+  const r=await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,{headers:{Authorization:`Bearer ${STRIPE_SECRET_KEY}`}});
+  const d=await r.json();
   if(!r.ok)throw new Error(d?.error?.message||'Stripe-Zahlung konnte nicht geprüft werden.');
-  return {paid:d.payment_status==='paid',amount:d.amount_total,currency:d.currency,id:d.id};
+  const source=d?.metadata?.source;
+  const packageKey=d?.metadata?.package_key;
+  const packagePrice=Number(d?.metadata?.package_price);
+  const draftHash=String(d?.metadata?.draft_hash||'');
+  const expected=packageKey==='pro'?14.99:packageKey==='plus'?9.99:packageKey==='start'?4.99:0;
+  const amountMatches=expected>0 && Number(d.amount_total)===Math.round(expected*100) && d.currency==='eur';
+  const paid=d.payment_status==='paid' && d.status==='complete' && d.mode==='payment' && source==='erstelli' && amountMatches && Math.abs(packagePrice-expected)<0.001 && /^[a-f0-9]{64}$/.test(draftHash);
+  return {paid,id:d.id,packageKey,price:expected,draftHash};
 }
 async function paypalToken(){
   if(!PAYPAL_CLIENT_ID||!PAYPAL_CLIENT_SECRET)throw new Error('PayPal ist noch nicht konfiguriert. PAYPAL_CLIENT_ID/PAYPAL_CLIENT_SECRET fehlen in .env.');
@@ -496,13 +556,13 @@ async function handleCreatePayment(req,res){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(res,400,{error:'Bitte eine gültige E-Mail-Adresse eingeben.'});
   if(!body.profile?.vision)return json(res,400,{error:'Bitte zuerst den Business Finder vollständig ausfüllen.'});
   if(body.provider==='paypal'){const d=await paypalCreate(body);const approve=(d.links||[]).find(x=>x.rel==='payer-action'||x.rel==='approve');return json(res,200,{url:approve?.href});}
-  const d=await stripeCreate(body); return json(res,200,{url:d.url});
+  const d=await stripeCreate(req,body); return json(res,200,{url:d.url});
 }
 async function handleVerifyPayment(req,res){
   const b=await readBody(req); let result;
   if(b.provider==='paypal')result=await paypalCapture(b.orderId); else result=await stripeVerify(b.sessionId);
   if(!result.paid)return json(res,402,{paid:false,error:'Zahlung ist noch nicht abgeschlossen.'});
-  const paymentToken=signPayment({paid:true,provider:b.provider,id:result.id,ts:Date.now()}); return json(res,200,{paid:true,paymentToken});
+  const paymentToken=signPayment({paid:true,provider:b.provider,id:result.id,price:result.price||null,packageKey:result.packageKey||null,draftHash:result.draftHash||null,ts:Date.now()}); return json(res,200,{paid:true,paymentToken});
 }
 
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.pdf':'application/pdf','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8'};
@@ -519,8 +579,8 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='POST'&&req.url==='/api/create-payment')return await handleCreatePayment(req,res);
     if(req.method==='POST'&&req.url==='/api/verify-payment')return await handleVerifyPayment(req,res);
     if(req.method==='POST'&&req.url==='/api/generate-plan')return await handleGenerate(req,res);
-    if(req.method==='GET'&&req.url==='/api/status')return json(res,200,{openai:Boolean(OPENAI_API_KEY),email:Boolean(RESEND_API_KEY&&FROM_EMAIL),stripe:Boolean(STRIPE_SECRET_KEY),paypal:Boolean(PAYPAL_CLIENT_ID&&PAYPAL_CLIENT_SECRET),erstelliModel:ERSTELLI_MODEL,planModel:PLAN_MODEL,reviewModel:REVIEW_MODEL,imageModel:IMAGE_MODEL});
+    if(req.method==='GET'&&req.url==='/api/status')return json(res,200,{openai:Boolean(OPENAI_API_KEY),email:Boolean(RESEND_API_KEY&&FROM_EMAIL),stripe:Boolean(STRIPE_SECRET_KEY&&STRIPE_PRICE_START&&STRIPE_PRICE_PLUS&&STRIPE_PRICE_PRO),stripePrices:Boolean(STRIPE_PRICE_START&&STRIPE_PRICE_PLUS&&STRIPE_PRICE_PRO),paypal:Boolean(PAYPAL_CLIENT_ID&&PAYPAL_CLIENT_SECRET),erstelliModel:ERSTELLI_MODEL,planModel:PLAN_MODEL,reviewModel:REVIEW_MODEL,imageModel:IMAGE_MODEL});
     return serve(req,res);
   }catch(e){console.error(e);return json(res,500,{error:e.message||'Serverfehler'});}
 });
-server.listen(PORT,()=>console.log(`Erstelli V41 läuft auf http://localhost:${PORT}`));
+server.listen(PORT,()=>console.log(`Erstelli V48 läuft auf Port ${PORT}`));

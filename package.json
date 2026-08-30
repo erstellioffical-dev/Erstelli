@@ -1,0 +1,11 @@
+{
+  "name": "erstelli",
+  "version": "48.0.0",
+  "private": true,
+  "description": "Erstelli website and Node backend",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check script.js && node --check server.js"
+  },
+  "engines": {"node": ">=20"}
+}

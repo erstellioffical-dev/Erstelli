@@ -94,3 +94,13 @@ V43 – stabiler Direkt-PDF-Export
 
 
 V44 Stabilitaet: Die zweite Qualitätsprüfung nutzt standardmäßig Luna und fällt bei technischen Problemen automatisch auf weitere konfigurierte Modelle zurück. Ein bereits gültiger Plan wird nicht mehr wegen eines separaten Review-Fehlers verworfen.
+
+
+=== V48 LIVE-HINWEISE ===
+- Stripe Checkout ist wieder aktiviert. Benötigte Railway-Variablen: STRIPE_SECRET_KEY, STRIPE_PRICE_START, STRIPE_PRICE_PLUS, STRIPE_PRICE_PRO.
+- PUBLIC_BASE_URL sollte auf https://erstelli.com stehen. Falls sie fehlt/localhost ist, nutzt der Server auf Railway den Forwarded Host.
+- DEMO_PAYMENT_BYPASS wird auf Railway aus Sicherheitsgründen ignoriert. Lokal kann er optional für Entwicklung aktiviert werden.
+- Stripe-Zahlungen sind an Paketpreis UND konkrete Bestellung gebunden. Ein bezahltes Start-Paket kann nicht als Pro-Zahlung wiederverwendet werden.
+- Frag Erstelli zeigt in Produktion keine localhost-/START_KI-Hinweise mehr. /api/status prüft, ob OPENAI_API_KEY und Stripe vollständig konfiguriert sind.
+- Rechtliche Seiten: /impressum.html, /datenschutz.html und /agb-widerruf.html. Bitte bei Änderungen der Anbieterstruktur oder Dienstleister fachlich prüfen/aktualisieren.
+- package.json wurde ergänzt; Railway kann den Dienst mit `npm start` bzw. `node server.js` starten.
