@@ -294,16 +294,15 @@ document.querySelectorAll('.choice').forEach(el=>{
 })();
 
 
-// V27 — exact one-character glow for every editable text field.
-// The glow uses the exact computed font of the active field and is positioned
-// from a hidden mirror that matches padding, border, wrapping and scroll.
+// V33 — exact one-character glow for every editable text field, desktop + mobile.
+// Mobile Safari/Chrome can pan the visual viewport when the keyboard opens. The
+// glow is therefore anchored in document coordinates instead of fixed viewport
+// coordinates, and visualViewport offsets are included when present.
 (function(){
   const selector = [
     'input:not([readonly]):not([disabled]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"])',
     'textarea:not([readonly]):not([disabled])'
   ].join(',');
-
-  const fields = [...document.querySelectorAll(selector)];
 
   const copied = [
     'fontFamily','fontSize','fontWeight','fontStyle','fontVariant',
@@ -319,19 +318,30 @@ document.querySelectorAll('.choice').forEach(el=>{
     copied.forEach(prop => target.style[prop] = cs[prop]);
   }
 
+  function documentPoint(rect){
+    const vv = window.visualViewport;
+    return {
+      left: rect.left + window.scrollX + (vv ? vv.offsetLeft : 0),
+      top: rect.top + window.scrollY + (vv ? vv.offsetTop : 0)
+    };
+  }
+
   function showExactGlow(field, ch){
     if(!ch || ch === '\n' || ch === '\r') return;
 
     const cs = getComputedStyle(field);
     const rect = field.getBoundingClientRect();
-    const caret = Math.max(0, (field.selectionStart ?? field.value.length) - 1);
+    const fieldPoint = documentPoint(rect);
+    const selection = typeof field.selectionStart === 'number' ? field.selectionStart : field.value.length;
+    const caret = Math.max(0, selection - 1);
 
-    // Mirror sits exactly over the real field in viewport coordinates.
+    // Mirror is anchored to the document so it follows the real field exactly
+    // even while iOS moves the visual viewport for the on-screen keyboard.
     const mirror = document.createElement('div');
     mirror.setAttribute('aria-hidden','true');
-    mirror.style.position = 'fixed';
-    mirror.style.left = rect.left + 'px';
-    mirror.style.top = rect.top + 'px';
+    mirror.style.position = 'absolute';
+    mirror.style.left = fieldPoint.left + 'px';
+    mirror.style.top = fieldPoint.top + 'px';
     mirror.style.width = rect.width + 'px';
     mirror.style.height = rect.height + 'px';
     mirror.style.visibility = 'hidden';
@@ -342,7 +352,6 @@ document.querySelectorAll('.choice').forEach(el=>{
     mirror.style.background = 'transparent';
     copyComputed(cs, mirror);
 
-    // Inner text layer lets us reproduce the input/textarea scroll offset.
     const inner = document.createElement('div');
     inner.style.position = 'relative';
     inner.style.left = (-field.scrollLeft) + 'px';
@@ -364,8 +373,6 @@ document.querySelectorAll('.choice').forEach(el=>{
     inner.style.textIndent = cs.textIndent;
     inner.style.textAlign = cs.textAlign;
 
-    // Padding and border belong on the actual mirror so probe starts at exactly
-    // the same content origin as the real field.
     if(field.tagName === 'TEXTAREA'){
       mirror.style.whiteSpace = 'pre-wrap';
       mirror.style.overflowWrap = 'break-word';
@@ -401,12 +408,12 @@ document.querySelectorAll('.choice').forEach(el=>{
     document.body.appendChild(mirror);
 
     const probeRect = probe.getBoundingClientRect();
+    const probePoint = documentPoint(probeRect);
 
     const pop = document.createElement('span');
     pop.className = 'typing-glow-char';
     pop.textContent = ch;
-
-    // Exact typography from the real field — no fixed font size anywhere.
+    pop.style.position = 'absolute';
     pop.style.fontFamily = cs.fontFamily;
     pop.style.fontSize = cs.fontSize;
     pop.style.fontWeight = cs.fontWeight;
@@ -417,30 +424,30 @@ document.querySelectorAll('.choice').forEach(el=>{
     pop.style.lineHeight = cs.lineHeight;
     pop.style.wordSpacing = cs.wordSpacing;
     pop.style.textTransform = cs.textTransform;
-
-    // Direct viewport coordinates from the probe. This is the same glyph box.
-    pop.style.left = probeRect.left + 'px';
-    pop.style.top = probeRect.top + 'px';
+    pop.style.left = probePoint.left + 'px';
+    pop.style.top = probePoint.top + 'px';
 
     document.body.appendChild(pop);
     mirror.remove();
-
     setTimeout(() => pop.remove(), 1000);
   }
 
-  fields.forEach(field => {
-    field.addEventListener('input', e => {
-      if(e.inputType?.startsWith('delete')) return;
+  // Delegated listener also covers fields that are inserted later by scripts.
+  document.addEventListener('input', e => {
+    const field = e.target;
+    if(!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+    if(!field.matches(selector)) return;
+    if(e.inputType?.startsWith('delete')) return;
 
-      let ch = '';
-      if(typeof e.data === 'string' && e.data.length){
-        ch = e.data.slice(-1);
-      } else if((field.selectionStart || 0) > 0){
-        ch = field.value.charAt(field.selectionStart - 1);
-      }
-      showExactGlow(field, ch);
-    });
-  });
+    let ch = '';
+    if(typeof e.data === 'string' && e.data.length){
+      ch = Array.from(e.data).slice(-1)[0] || '';
+    } else {
+      const pos = typeof field.selectionStart === 'number' ? field.selectionStart : field.value.length;
+      if(pos > 0) ch = field.value.charAt(pos - 1);
+    }
+    showExactGlow(field, ch);
+  }, true);
 })();
 
 

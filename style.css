@@ -2092,12 +2092,12 @@ textarea.char-glow{
 }
 
 /* =========================================================
-   V27 — exact typing glow
+   V33 — exact typing glow, mobile-safe
    ========================================================= */
 
 /* Do not force text-field typography. Each field keeps its own normal ERSTELLI size. */
 .typing-glow-char{
-  position:fixed;
+  position:absolute;
   z-index:9999;
   pointer-events:none;
   margin:0;
