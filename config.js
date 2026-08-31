@@ -2,7 +2,7 @@
 // Die Supabase-Werte werden beim Live-Setup eingetragen.
 window.ERSTELLI_CONFIG = {
   whatsappNumber: "491708990829",
-  supabaseUrl: "https://jsbzjrxzqnpjwfrzfoxn.supabase.co",
+  supabaseUrl: "https://jsbzjrxzgnpjwfrzfoxn.supabase.co",
   supabasePublishableKey: "sb_publishable_lDkFEBNXxU6nM6YTston1g_3XD31ZQr",
   requestFunction: "submit_request",
   reviewFunction: "submit_review",
