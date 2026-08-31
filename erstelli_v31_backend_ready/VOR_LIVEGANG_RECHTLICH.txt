@@ -1,0 +1,11 @@
+ERSTELLI – vor dem Livegang ausfüllen/pruefen
+
+1. Impressum: Name, Rechtsform und Anschrift sind eingetragen. Name, Rechtsform, Anschrift und geschäftliche E-Mail-Adresse sind eingetragen. Noch prüfen/ergänzen: ggf. Telefonnummer, Registerdaten und USt-ID/W-IdNr., falls vorhanden.
+2. Datenschutz: tatsächlichen Hostinganbieter und jeden tatsächlich eingebundenen externen Dienst eintragen.
+3. Formular: aktuell ist der Versand noch Demo. Beim Anschluss eines Backend-/Mail-Dienstes Datenschutzerklärung aktualisieren.
+4. AGB: finalen Unternehmensstatus, Zahlungsmodell, Korrekturrunden und Verbraucher/B2B-Zielgruppe festlegen.
+5. Wenn Verbraucher online verbindlich bestellen können: korrekte Widerrufsbelehrung, ggf. Online-Widerrufsfunktion und Button-/Informationspflichten implementieren.
+6. Rechnung: Steuerstatus (z.B. Kleinunternehmer oder Regelbesteuerung) korrekt abbilden.
+7. Rechtstexte vor kommerziellem Livegang durch einen deutschen Rechtsanwalt / spezialisierten Anbieter prüfen lassen.
+
+8. WhatsApp: echte Nummer in script.js bei WHATSAPP_NUMBER im internationalen Format eintragen, z.B. 491701234567.

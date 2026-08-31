@@ -1,0 +1,40 @@
+ERSTELLI – LIVE-SETUP V31
+
+Die Website ist frontendseitig für den Livebetrieb vorbereitet. Für echte Anfragen, Uploads,
+Bewertungen und Analytics muss ein Supabase-Projekt verbunden werden.
+
+1. backend/supabase.sql im gewünschten ERSTELLI-Supabase-Projekt ausführen.
+2. Edge Functions deployen:
+   - submit-request
+   - submit-review
+   - public-reviews
+   - complete-order
+   - track-event
+   - analytics-report
+3. Supabase-Secrets setzen:
+   - RESEND_API_KEY
+   - ERSTELLI_FROM_EMAIL
+   - ERSTELLI_OWNER_EMAIL=erstelliyourwebsite@gmail.com
+   - ERSTELLI_ADMIN_SECRET=<langes zufälliges Admin-Passwort>
+   - ERSTELLI_SITE_URL=<finale https:// Domain>
+4. config.js eintragen:
+   - supabaseUrl
+   - supabasePublishableKey
+5. Resend-Absenderdomain verifizieren und ERSTELLI_FROM_EMAIL auf eine freigegebene Absenderadresse setzen.
+6. index.html, style.css, script.js, config.js und Rechtstexte auf GitHub Pages veröffentlichen.
+7. Funktionstest:
+   - Anfrage ohne Datei
+   - Anfrage mit Datei
+   - Bestätigungsmail
+   - Admin-Analytics
+   - Auftrag abschließen -> Bewertungscode
+   - Bewertung absenden -> manuelle Freigabe in Supabase -> Anzeige auf Website
+
+ANALYTICS
+Die V31 misst datensparsam ohne Cookies/LocalStorage/Fingerprinting:
+Seitenaufrufe, Seitenbereiche, Scrolltiefe, Paket-/Feature-Klicks, Formularstart,
+Anfrageerfolg, WhatsApp-/E-Mail-Klicks, Quelle/UTM und Gerätegruppe.
+admin.html zeigt die Auswertung nach Eingabe des serverseitigen ERSTELLI_ADMIN_SECRET.
+
+WICHTIG
+Das Admin-Passwort niemals in config.js oder anderen öffentlichen Dateien speichern.

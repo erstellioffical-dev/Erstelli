@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Projekt bewerten | ERSTELLI</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.review-page{min-height:100vh;display:grid;place-items:center;padding:30px 16px;background:linear-gradient(145deg,#f8fdff,#eef8ff 55%,#f7f3ff)}
+.review-card{width:min(680px,100%);background:#fff;border:1px solid rgba(41,135,220,.13);border-radius:28px;padding:clamp(24px,5vw,46px);box-shadow:0 28px 90px rgba(25,91,150,.12)}
+.review-card h1{font-size:clamp(38px,7vw,62px);line-height:1.02;margin:10px 0 14px;background:linear-gradient(90deg,#1299ff,#55d8ff,#8e63ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.rating-input{display:flex;gap:6px;margin:18px 0}
+.rating-input button{border:0;background:none;font-size:38px;cursor:pointer;color:#b9c8d7;padding:0}
+.rating-input button.active{color:#6778ff;text-shadow:0 0 12px rgba(103,120,255,.28)}
+.review-card input,.review-card textarea{width:100%;margin:7px 0;padding:14px 16px;border:1px solid rgba(42,115,175,.15);border-radius:14px;font:inherit}
+.review-card textarea{min-height:130px;resize:vertical}.review-status{margin-top:12px;font-weight:700;font-size:13px}
+</style>
+</head>
+<body class="review-page">
+<main class="review-card">
+  <div class="eyebrow">KUNDENBEWERTUNG</div>
+  <h1>Wie war dein Projekt mit ERSTELLI?</h1>
+  <p>Dieser Bewertungslink ist für abgeschlossene Aufträge vorgesehen. Deine Bewertung wird nach einer kurzen Prüfung veröffentlicht.</p>
+  <form id="reviewForm">
+    <input id="reviewToken" required placeholder="Auftragscode">
+    <input id="reviewName" placeholder="Name / Firma (optional)">
+    <div class="rating-input" id="ratingInput" aria-label="Bewertung von 1 bis 5 Sternen">
+      <button type="button" data-rating="1">★</button><button type="button" data-rating="2">★</button><button type="button" data-rating="3">★</button><button type="button" data-rating="4">★</button><button type="button" data-rating="5">★</button>
+    </div>
+    <textarea id="reviewText" required maxlength="1200" placeholder="Wie hat dir die Zusammenarbeit gefallen?"></textarea>
+    <button class="cta full" type="submit">Bewertung absenden →</button>
+    <div id="reviewStatus" class="review-status"></div>
+  </form>
+  <a class="back" href="index.html">← Zurück zu ERSTELLI</a>
+</main>
+<script src="config.js"></script>
+<script>
+let rating=0;
+const params=new URLSearchParams(location.search);
+document.getElementById('reviewToken').value=params.get('token')||'';
+document.querySelectorAll('#ratingInput button').forEach(btn=>btn.addEventListener('click',()=>{
+  rating=Number(btn.dataset.rating);
+  document.querySelectorAll('#ratingInput button').forEach(b=>b.classList.toggle('active',Number(b.dataset.rating)<=rating));
+}));
+document.getElementById('reviewForm').addEventListener('submit',async(e)=>{
+  e.preventDefault();
+  const status=document.getElementById('reviewStatus');
+  if(!rating){status.textContent='Bitte 1 bis 5 Sterne auswählen.';return;}
+  const cfg=window.ERSTELLI_CONFIG||{};
+  if(!cfg.supabaseUrl||!cfg.supabasePublishableKey){
+    status.textContent='Die Bewertung konnte aktuell nicht gesendet werden. Bitte versuche es später erneut.';
+    return;
+  }
+  status.textContent='Bewertung wird gesendet …';
+  try{
+    const res=await fetch(`${cfg.supabaseUrl}/functions/v1/${cfg.reviewFunction||'submit-review'}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':cfg.supabasePublishableKey},
+      body:JSON.stringify({
+        token:document.getElementById('reviewToken').value.trim(),
+        displayName:document.getElementById('reviewName').value.trim(),
+        rating,
+        text:document.getElementById('reviewText').value.trim()
+      })
+    });
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||'Fehler beim Senden');
+    status.textContent='Danke! Deine Bewertung wurde übermittelt und wird vor Veröffentlichung geprüft.';
+    e.target.reset(); rating=0;
+    document.querySelectorAll('#ratingInput button').forEach(b=>b.classList.remove('active'));
+  }catch(err){status.textContent=err.message;}
+});
+</script>
+</body></html>
