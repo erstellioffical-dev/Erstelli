@@ -2290,3 +2290,40 @@ body::before{
     visibility:hidden!important;
   }
 }
+
+
+/* =========================================================
+   V40 — iPhone/mobile hard stop
+   No patterned/fixed background on touch devices. This avoids
+   Safari visual-viewport drift and rubber-band repaint artifacts.
+   ========================================================= */
+@media (max-width:700px), (pointer:coarse){
+  html,
+  html.mobile-static-code-bg,
+  html.mobile-no-code-bg{
+    background:#eefaff!important;
+    background-image:none!important;
+    background-attachment:initial!important;
+    overscroll-behavior-y:none;
+  }
+  body,
+  html.mobile-static-code-bg body,
+  html.mobile-no-code-bg body{
+    background:#eefaff!important;
+    background-image:none!important;
+    overscroll-behavior-y:none;
+  }
+  body::before,
+  html.mobile-static-code-bg body::before,
+  html.mobile-no-code-bg body::before{
+    display:none!important;
+    content:none!important;
+  }
+  #codeRain,
+  html.mobile-static-code-bg #codeRain,
+  html.mobile-no-code-bg #codeRain{
+    display:none!important;
+    visibility:hidden!important;
+    opacity:0!important;
+  }
+}
