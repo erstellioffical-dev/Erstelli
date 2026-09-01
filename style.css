@@ -2264,3 +2264,29 @@ body::before{
     will-change:auto!important;
   }
 }
+
+/* =========================================================
+   V39 — iPhone hard lock
+   On touch/mobile the animated canvas is removed from the
+   compositor completely. The code is rendered once and used
+   as the root canvas background, so touch scrolling cannot
+   move, blink or redraw it.
+   ========================================================= */
+@media (max-width:700px), (pointer:coarse){
+  html.mobile-static-code-bg{
+    min-height:100%;
+    background-color:#e8f8ff!important;
+    background-attachment:scroll,scroll!important;
+  }
+  html.mobile-static-code-bg body{
+    background:transparent!important;
+  }
+  html.mobile-static-code-bg body::before{
+    display:none!important;
+    content:none!important;
+  }
+  html.mobile-static-code-bg #codeRain{
+    display:none!important;
+    visibility:hidden!important;
+  }
+}
