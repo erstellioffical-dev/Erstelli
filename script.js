@@ -9,7 +9,7 @@ if('IntersectionObserver' in window){
   revealItems.forEach(el=>el.classList.add('visible'));
 }
 
-// code background — V39: desktop animated, mobile rendered ONCE as root background
+// code background — V40: desktop animated, mobile completely disabled
 const c=document.getElementById('codeRain');
 const ctx=c?.getContext('2d',{alpha:true});
 let W=0,H=0,tracks=[],rafId=0,lastFrame=0,paused=false;
@@ -30,7 +30,7 @@ const codeStrings=[
 function setupCode(){
   if(!c||!ctx)return;
   W=Math.max(1,Math.floor(window.innerWidth));
-  H=Math.max(1,Math.floor(isMobileCodeBg ? (window.screen?.height||window.innerHeight) : window.innerHeight));
+  H=Math.max(1,Math.floor(window.innerHeight));
   c.width=W;
   c.height=H;
   c.style.width=W+'px';
@@ -40,7 +40,7 @@ function setupCode(){
   tracks=Array.from({length:count},(_,i)=>({
     text:codeStrings[i%codeStrings.length].repeat(4),
     y:(i+.7)*(H/count),
-    x:isMobileCodeBg ? -Math.round((i%3)*145) : Math.random()*-700,
+    x:Math.random()*-700,
     dir:i%2===0?-1:1,
     speed:(lowPower?.14:.18)+Math.random()*(lowPower?.06:.09),
     phase:i*.9
@@ -58,7 +58,7 @@ function makeCodeGradient(t,phase){
   return g;
 }
 
-function paintCodeFrame(t=0,move=true){
+function paintCodeFrame(t){
   if(!c||!ctx)return;
   ctx.clearRect(0,0,W,H);
   ctx.font=(lowPower?'11.5px':'12.5px')+' ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
@@ -68,36 +68,13 @@ function paintCodeFrame(t=0,move=true){
     ctx.shadowColor=i%2===0?'rgba(62,207,255,.34)':'rgba(118,114,255,.27)';
     ctx.shadowBlur=lowPower?4:6;
     const width=ctx.measureText(tr.text).width;
-    if(move){
-      tr.x+=tr.dir*tr.speed;
-      if(tr.dir<0&&tr.x<-width/2)tr.x=0;
-      if(tr.dir>0&&tr.x>0)tr.x=-width/2;
-    }
+    tr.x+=tr.dir*tr.speed;
+    if(tr.dir<0&&tr.x<-width/2)tr.x=0;
+    if(tr.dir>0&&tr.x>0)tr.x=-width/2;
     ctx.fillText(tr.text,tr.x,tr.y);
     ctx.fillText(tr.text,tr.x+width/2,tr.y);
   });
   ctx.shadowBlur=0;
-}
-
-function installStaticMobileBackground(){
-  if(!isMobileCodeBg||!c||!ctx)return;
-  setupCode();
-  // Draw exactly one deterministic frame. No rAF, no scroll/resize listener,
-  // no fixed canvas: Safari therefore has nothing to recompose while dragging.
-  paintCodeFrame(2400,false);
-  try{
-    const image=c.toDataURL('image/png');
-    const root=document.documentElement;
-    root.classList.add('mobile-static-code-bg');
-    root.style.backgroundImage=`url("${image}"), linear-gradient(180deg,#e8f8ff 0%,#f9fdff 53%,#e6f7ff 100%)`;
-    root.style.backgroundRepeat='no-repeat, no-repeat';
-    root.style.backgroundPosition='center top, center top';
-    root.style.backgroundSize='100vw 100lvh, 100vw 100lvh';
-    c.style.display='none';
-  }catch(_){
-    // Even if dataURL creation fails, leave one still frame and never animate it.
-    c.style.position='absolute';
-  }
 }
 
 function drawCode(t){
@@ -105,11 +82,17 @@ function drawCode(t){
   rafId=requestAnimationFrame(drawCode);
   if(t-lastFrame<frameMS)return;
   lastFrame=t;
-  paintCodeFrame(t,true);
+  paintCodeFrame(t);
 }
 
 if(isMobileCodeBg){
-  installStaticMobileBackground();
+  // Safari/iPhone: no canvas/pattern at all. A uniform background cannot drift visually.
+  document.documentElement.classList.add('mobile-no-code-bg');
+  if(c){
+    c.width=1;
+    c.height=1;
+    c.style.display='none';
+  }
 }else{
   setupCode();
   requestAnimationFrame(drawCode);
@@ -121,8 +104,7 @@ if(isMobileCodeBg){
     paused=document.hidden;
     if(!paused){
       lastFrame=0;
-      cancelAnimationFrame(rafId);
-      rafId=requestAnimationFrame(drawCode);
+      requestAnimationFrame(drawCode);
     }
   });
 }
