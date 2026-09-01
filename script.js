@@ -9,12 +9,10 @@ if('IntersectionObserver' in window){
   revealItems.forEach(el=>el.classList.add('visible'));
 }
 
-// code background — V40: desktop animated, mobile completely disabled
-const c=document.getElementById('codeRain');
-const ctx=c?.getContext('2d',{alpha:true});
-let W=0,H=0,tracks=[],rafId=0,lastFrame=0,paused=false;
+// code background — V7 balanced neon code, slower + clearer
+const c=document.getElementById('codeRain'),ctx=c.getContext('2d',{alpha:true});
+let W=0,H=0,tracks=[],rafId=0,lastFrame=0,paused=false,frameCounter=0;
 const lowPower=(navigator.hardwareConcurrency||8)<=4;
-const isMobileCodeBg=window.matchMedia('(max-width:700px), (pointer:coarse)').matches;
 const targetFPS=lowPower?20:28;
 const frameMS=1000/targetFPS;
 const codeStrings=[
@@ -26,13 +24,26 @@ const codeStrings=[
   "const website={design:'premium',speed:'fast',mobile:true};  domain.connect();  ",
   "hover:translateY(-4px);  glow:true;  UX.first();  details.matter();  "
 ];
+const isMobileCodeBg=window.matchMedia('(max-width:700px), (pointer:coarse)').matches;
+let mobileCanvasWidth=0;
 
-function setupCode(){
-  if(!c||!ctx)return;
-  W=Math.max(1,Math.floor(window.innerWidth));
-  H=Math.max(1,Math.floor(window.innerHeight));
-  c.width=W;
-  c.height=H;
+function setupCode(force=false){
+  const nextW=window.innerWidth;
+  const nextH=isMobileCodeBg
+    ? Math.max(window.screen?.height||0, window.innerHeight)
+    : window.innerHeight;
+
+  // Mobile Safari changes only the viewport height while the address bar
+  // collapses/expands. Ignore those height-only changes completely.
+  if(isMobileCodeBg && !force && tracks.length && Math.abs(nextW-mobileCanvasWidth)<20){
+    return;
+  }
+
+  W=nextW;
+  H=nextH;
+  mobileCanvasWidth=nextW;
+  c.width=Math.max(1,Math.floor(W));
+  c.height=Math.max(1,Math.floor(H));
   c.style.width=W+'px';
   c.style.height=H+'px';
   ctx.setTransform(1,0,0,1,0,0);
@@ -43,10 +54,24 @@ function setupCode(){
     x:Math.random()*-700,
     dir:i%2===0?-1:1,
     speed:(lowPower?.14:.18)+Math.random()*(lowPower?.06:.09),
-    phase:i*.9
+    phase:i*0.9
   }));
 }
 
+setupCode(true);
+
+if(!isMobileCodeBg){
+  addEventListener('resize',()=>{
+    clearTimeout(window.__codeResize);
+    window.__codeResize=setTimeout(()=>setupCode(true),180);
+  },{passive:true});
+}else{
+  addEventListener('orientationchange',()=>{
+    clearTimeout(window.__codeOrientation);
+    window.__codeOrientation=setTimeout(()=>setupCode(true),350);
+  },{passive:true});
+}
+document.addEventListener('visibilitychange',()=>{paused=document.hidden;if(!paused){lastFrame=0;rafId=requestAnimationFrame(drawCode)}});
 function makeCodeGradient(t,phase){
   const drift=(Math.sin(t*.00018+phase)+1)/2;
   const g=ctx.createLinearGradient(0,0,W,0);
@@ -57,9 +82,13 @@ function makeCodeGradient(t,phase){
   g.addColorStop(1,'rgba(28,133,255,.48)');
   return g;
 }
-
-function paintCodeFrame(t){
-  if(!c||!ctx)return;
+function drawCode(t){
+  if(paused)return;
+  rafId=requestAnimationFrame(drawCode);
+  if(t-lastFrame<frameMS)return;
+  const dt=Math.min(2.2,(t-lastFrame)/frameMS || 1);
+  lastFrame=t;
+  frameCounter++;
   ctx.clearRect(0,0,W,H);
   ctx.font=(lowPower?'11.5px':'12.5px')+' ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   ctx.textBaseline='middle';
@@ -68,46 +97,15 @@ function paintCodeFrame(t){
     ctx.shadowColor=i%2===0?'rgba(62,207,255,.34)':'rgba(118,114,255,.27)';
     ctx.shadowBlur=lowPower?4:6;
     const width=ctx.measureText(tr.text).width;
-    tr.x+=tr.dir*tr.speed;
-    if(tr.dir<0&&tr.x<-width/2)tr.x=0;
-    if(tr.dir>0&&tr.x>0)tr.x=-width/2;
+    tr.x+=tr.dir*tr.speed*dt;
+    if(tr.dir<0 && tr.x<-width/2)tr.x=0;
+    if(tr.dir>0 && tr.x>0)tr.x=-width/2;
     ctx.fillText(tr.text,tr.x,tr.y);
     ctx.fillText(tr.text,tr.x+width/2,tr.y);
   });
   ctx.shadowBlur=0;
 }
-
-function drawCode(t){
-  if(paused||isMobileCodeBg)return;
-  rafId=requestAnimationFrame(drawCode);
-  if(t-lastFrame<frameMS)return;
-  lastFrame=t;
-  paintCodeFrame(t);
-}
-
-if(isMobileCodeBg){
-  // Safari/iPhone: no canvas/pattern at all. A uniform background cannot drift visually.
-  document.documentElement.classList.add('mobile-no-code-bg');
-  if(c){
-    c.width=1;
-    c.height=1;
-    c.style.display='none';
-  }
-}else{
-  setupCode();
-  requestAnimationFrame(drawCode);
-  addEventListener('resize',()=>{
-    clearTimeout(window.__codeResize);
-    window.__codeResize=setTimeout(()=>setupCode(),180);
-  },{passive:true});
-  document.addEventListener('visibilitychange',()=>{
-    paused=document.hidden;
-    if(!paused){
-      lastFrame=0;
-      requestAnimationFrame(drawCode);
-    }
-  });
-}
+requestAnimationFrame(drawCode);
 
 // configurator
 let base={name:'Onepager',price:299,pages:1};let revisions=0;const selected=new Map();const totalEl=document.getElementById('totalPrice'),summary=document.getElementById('summary'),configText=document.getElementById('configText');
@@ -520,9 +518,14 @@ document.querySelectorAll('.choice').forEach(el=>{
   document.querySelectorAll('section[id]').forEach(s=>sectionObs.observe(s));
 
   const depths=[25,50,75,100];
-  addEventListener('scroll',()=>{
-    const max=Math.max(1,document.documentElement.scrollHeight-innerHeight);
-    const pct=Math.min(100,Math.round(scrollY/max*100));
+  const scrollRoot=document.getElementById('pageScroll');
+  const scrollTarget=(scrollRoot && getComputedStyle(scrollRoot).overflowY!=='visible')?scrollRoot:window;
+  scrollTarget.addEventListener('scroll',()=>{
+    const current=scrollTarget===window?window.scrollY:scrollRoot.scrollTop;
+    const max=scrollTarget===window
+      ? Math.max(1,document.documentElement.scrollHeight-window.innerHeight)
+      : Math.max(1,scrollRoot.scrollHeight-scrollRoot.clientHeight);
+    const pct=Math.min(100,Math.round(current/max*100));
     depths.forEach(d=>{if(pct>=d&&!sent.has(`scroll:${d}`)){sent.add(`scroll:${d}`);track('scroll_depth',{value:String(d)})}});
   },{passive:true});
 
