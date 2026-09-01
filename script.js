@@ -1,4 +1,3 @@
-
 // reveal
 const revealItems=[...document.querySelectorAll('.reveal')];
 if('IntersectionObserver' in window){
@@ -10,10 +9,12 @@ if('IntersectionObserver' in window){
   revealItems.forEach(el=>el.classList.add('visible'));
 }
 
-// code background — V7 balanced neon code, slower + clearer
-const c=document.getElementById('codeRain'),ctx=c.getContext('2d',{alpha:true});
-let W=0,H=0,tracks=[],rafId=0,lastFrame=0,paused=false,frameCounter=0;
+// code background — V39: desktop animated, mobile rendered ONCE as root background
+const c=document.getElementById('codeRain');
+const ctx=c?.getContext('2d',{alpha:true});
+let W=0,H=0,tracks=[],rafId=0,lastFrame=0,paused=false;
 const lowPower=(navigator.hardwareConcurrency||8)<=4;
+const isMobileCodeBg=window.matchMedia('(max-width:700px), (pointer:coarse)').matches;
 const targetFPS=lowPower?20:28;
 const frameMS=1000/targetFPS;
 const codeStrings=[
@@ -25,26 +26,13 @@ const codeStrings=[
   "const website={design:'premium',speed:'fast',mobile:true};  domain.connect();  ",
   "hover:translateY(-4px);  glow:true;  UX.first();  details.matter();  "
 ];
-const isMobileCodeBg=window.matchMedia('(max-width:700px), (pointer:coarse)').matches;
-let mobileCanvasWidth=0;
 
-function setupCode(force=false){
-  const nextW=window.innerWidth;
-  const nextH=isMobileCodeBg
-    ? Math.max(window.screen?.height||0, window.innerHeight)
-    : window.innerHeight;
-
-  // Mobile Safari changes only the viewport height while the address bar
-  // collapses/expands. Ignore those height-only changes completely.
-  if(isMobileCodeBg && !force && tracks.length && Math.abs(nextW-mobileCanvasWidth)<20){
-    return;
-  }
-
-  W=nextW;
-  H=nextH;
-  mobileCanvasWidth=nextW;
-  c.width=Math.max(1,Math.floor(W));
-  c.height=Math.max(1,Math.floor(H));
+function setupCode(){
+  if(!c||!ctx)return;
+  W=Math.max(1,Math.floor(window.innerWidth));
+  H=Math.max(1,Math.floor(isMobileCodeBg ? (window.screen?.height||window.innerHeight) : window.innerHeight));
+  c.width=W;
+  c.height=H;
   c.style.width=W+'px';
   c.style.height=H+'px';
   ctx.setTransform(1,0,0,1,0,0);
@@ -52,53 +40,13 @@ function setupCode(force=false){
   tracks=Array.from({length:count},(_,i)=>({
     text:codeStrings[i%codeStrings.length].repeat(4),
     y:(i+.7)*(H/count),
-    x:Math.random()*-700,
+    x:isMobileCodeBg ? -Math.round((i%3)*145) : Math.random()*-700,
     dir:i%2===0?-1:1,
-    // Mobile stays completely still. This prevents Safari scroll/rAF jumps.
-    speed:isMobileCodeBg?0:((lowPower?.14:.18)+Math.random()*(lowPower?.06:.09)),
-    phase:i*0.9
+    speed:(lowPower?.14:.18)+Math.random()*(lowPower?.06:.09),
+    phase:i*.9
   }));
 }
 
-function pinMobileCodeCanvas(){
-  if(!isMobileCodeBg || !window.visualViewport) return;
-  const vv=window.visualViewport;
-  // visualViewport offsets describe the visible viewport inside Safari's
-  // layout viewport. Counter them so the canvas remains visually pinned.
-  c.style.transform=`translate3d(${vv.offsetLeft||0}px, ${vv.offsetTop||0}px, 0)`;
-}
-
-let __pinCodeRaf=0;
-function schedulePinMobileCodeCanvas(){
-  if(!isMobileCodeBg) return;
-  cancelAnimationFrame(__pinCodeRaf);
-  __pinCodeRaf=requestAnimationFrame(pinMobileCodeCanvas);
-}
-
-setupCode(true);
-pinMobileCodeCanvas();
-
-if(!isMobileCodeBg){
-  addEventListener('resize',()=>{
-    clearTimeout(window.__codeResize);
-    window.__codeResize=setTimeout(()=>setupCode(true),180);
-  },{passive:true});
-}else{
-  addEventListener('orientationchange',()=>{
-    clearTimeout(window.__codeOrientation);
-    window.__codeOrientation=setTimeout(()=>{
-      setupCode(true);
-      pinMobileCodeCanvas();
-    },350);
-  },{passive:true});
-
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('scroll',schedulePinMobileCodeCanvas,{passive:true});
-    window.visualViewport.addEventListener('resize',schedulePinMobileCodeCanvas,{passive:true});
-  }
-  addEventListener('scroll',schedulePinMobileCodeCanvas,{passive:true});
-}
-document.addEventListener('visibilitychange',()=>{paused=document.hidden;if(!paused){lastFrame=0;pinMobileCodeCanvas();rafId=requestAnimationFrame(drawCode)}});
 function makeCodeGradient(t,phase){
   const drift=(Math.sin(t*.00018+phase)+1)/2;
   const g=ctx.createLinearGradient(0,0,W,0);
@@ -109,13 +57,9 @@ function makeCodeGradient(t,phase){
   g.addColorStop(1,'rgba(28,133,255,.48)');
   return g;
 }
-function drawCode(t){
-  if(paused)return;
-  rafId=requestAnimationFrame(drawCode);
-  if(t-lastFrame<frameMS)return;
-  const dt=Math.min(2.2,(t-lastFrame)/frameMS || 1);
-  lastFrame=t;
-  frameCounter++;
+
+function paintCodeFrame(t=0,move=true){
+  if(!c||!ctx)return;
   ctx.clearRect(0,0,W,H);
   ctx.font=(lowPower?'11.5px':'12.5px')+' ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   ctx.textBaseline='middle';
@@ -124,15 +68,64 @@ function drawCode(t){
     ctx.shadowColor=i%2===0?'rgba(62,207,255,.34)':'rgba(118,114,255,.27)';
     ctx.shadowBlur=lowPower?4:6;
     const width=ctx.measureText(tr.text).width;
-    tr.x+=tr.dir*tr.speed*dt;
-    if(tr.dir<0 && tr.x<-width/2)tr.x=0;
-    if(tr.dir>0 && tr.x>0)tr.x=-width/2;
+    if(move){
+      tr.x+=tr.dir*tr.speed;
+      if(tr.dir<0&&tr.x<-width/2)tr.x=0;
+      if(tr.dir>0&&tr.x>0)tr.x=-width/2;
+    }
     ctx.fillText(tr.text,tr.x,tr.y);
     ctx.fillText(tr.text,tr.x+width/2,tr.y);
   });
   ctx.shadowBlur=0;
 }
-requestAnimationFrame(drawCode);
+
+function installStaticMobileBackground(){
+  if(!isMobileCodeBg||!c||!ctx)return;
+  setupCode();
+  // Draw exactly one deterministic frame. No rAF, no scroll/resize listener,
+  // no fixed canvas: Safari therefore has nothing to recompose while dragging.
+  paintCodeFrame(2400,false);
+  try{
+    const image=c.toDataURL('image/png');
+    const root=document.documentElement;
+    root.classList.add('mobile-static-code-bg');
+    root.style.backgroundImage=`url("${image}"), linear-gradient(180deg,#e8f8ff 0%,#f9fdff 53%,#e6f7ff 100%)`;
+    root.style.backgroundRepeat='no-repeat, no-repeat';
+    root.style.backgroundPosition='center top, center top';
+    root.style.backgroundSize='100vw 100lvh, 100vw 100lvh';
+    c.style.display='none';
+  }catch(_){
+    // Even if dataURL creation fails, leave one still frame and never animate it.
+    c.style.position='absolute';
+  }
+}
+
+function drawCode(t){
+  if(paused||isMobileCodeBg)return;
+  rafId=requestAnimationFrame(drawCode);
+  if(t-lastFrame<frameMS)return;
+  lastFrame=t;
+  paintCodeFrame(t,true);
+}
+
+if(isMobileCodeBg){
+  installStaticMobileBackground();
+}else{
+  setupCode();
+  requestAnimationFrame(drawCode);
+  addEventListener('resize',()=>{
+    clearTimeout(window.__codeResize);
+    window.__codeResize=setTimeout(()=>setupCode(),180);
+  },{passive:true});
+  document.addEventListener('visibilitychange',()=>{
+    paused=document.hidden;
+    if(!paused){
+      lastFrame=0;
+      cancelAnimationFrame(rafId);
+      rafId=requestAnimationFrame(drawCode);
+    }
+  });
+}
 
 // configurator
 let base={name:'Onepager',price:299,pages:1};let revisions=0;const selected=new Map();const totalEl=document.getElementById('totalPrice'),summary=document.getElementById('summary'),configText=document.getElementById('configText');
