@@ -332,10 +332,10 @@ document.querySelectorAll('.choice').forEach(el=>{
 })();
 
 
-// V33 — exact one-character glow for every editable text field, desktop + mobile.
-// Mobile Safari/Chrome can pan the visual viewport when the keyboard opens. The
-// glow is therefore anchored in document coordinates instead of fixed viewport
-// coordinates, and visualViewport offsets are included when present.
+// V44 — exact one-character glow for every editable text field.
+// Important on mobile: the page itself scrolls inside .page-scroll while the
+// body/background stay fixed. Glow coordinates therefore have to be measured
+// in the same scroll container as the real input instead of against <body>.
 (function(){
   const selector = [
     'input:not([readonly]):not([disabled]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"])',
@@ -356,11 +356,23 @@ document.querySelectorAll('.choice').forEach(el=>{
     copied.forEach(prop => target.style[prop] = cs[prop]);
   }
 
-  function documentPoint(rect){
-    const vv = window.visualViewport;
+  function getCoordinateRoot(field){
+    const scroller = field.closest('.page-scroll');
+    if(scroller && getComputedStyle(scroller).overflowY !== 'visible') return scroller;
+    return document.body;
+  }
+
+  function pointInRoot(rect, root){
+    if(root === document.body){
+      return {
+        left: rect.left + window.scrollX,
+        top: rect.top + window.scrollY
+      };
+    }
+    const rootRect = root.getBoundingClientRect();
     return {
-      left: rect.left + window.scrollX + (vv ? vv.offsetLeft : 0),
-      top: rect.top + window.scrollY + (vv ? vv.offsetTop : 0)
+      left: rect.left - rootRect.left + root.scrollLeft,
+      top: rect.top - rootRect.top + root.scrollTop
     };
   }
 
@@ -369,12 +381,11 @@ document.querySelectorAll('.choice').forEach(el=>{
 
     const cs = getComputedStyle(field);
     const rect = field.getBoundingClientRect();
-    const fieldPoint = documentPoint(rect);
+    const root = getCoordinateRoot(field);
+    const fieldPoint = pointInRoot(rect, root);
     const selection = typeof field.selectionStart === 'number' ? field.selectionStart : field.value.length;
     const caret = Math.max(0, selection - 1);
 
-    // Mirror is anchored to the document so it follows the real field exactly
-    // even while iOS moves the visual viewport for the on-screen keyboard.
     const mirror = document.createElement('div');
     mirror.setAttribute('aria-hidden','true');
     mirror.style.position = 'absolute';
@@ -443,10 +454,10 @@ document.querySelectorAll('.choice').forEach(el=>{
     inner.appendChild(before);
     inner.appendChild(probe);
     mirror.appendChild(inner);
-    document.body.appendChild(mirror);
+    root.appendChild(mirror);
 
     const probeRect = probe.getBoundingClientRect();
-    const probePoint = documentPoint(probeRect);
+    const probePoint = pointInRoot(probeRect, root);
 
     const pop = document.createElement('span');
     pop.className = 'typing-glow-char';
@@ -465,12 +476,11 @@ document.querySelectorAll('.choice').forEach(el=>{
     pop.style.left = probePoint.left + 'px';
     pop.style.top = probePoint.top + 'px';
 
-    document.body.appendChild(pop);
+    root.appendChild(pop);
     mirror.remove();
     setTimeout(() => pop.remove(), 1000);
   }
 
-  // Delegated listener also covers fields that are inserted later by scripts.
   document.addEventListener('input', e => {
     const field = e.target;
     if(!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;

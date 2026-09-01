@@ -2280,3 +2280,11 @@ textarea.char-glow{
 
   .whatsapp-float,.chat-toggle,.chat-panel{z-index:90!important;}
 }
+
+/* =========================================================
+   V44 — typing glow shares the mobile content scroll layer
+   ========================================================= */
+@media (max-width: 820px){
+  .page-scroll{position:fixed;}
+  .page-scroll > .typing-glow-char{z-index:9999!important;}
+}
