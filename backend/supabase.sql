@@ -78,3 +78,18 @@ create index if not exists analytics_events_created_at_idx on public.analytics_e
 create index if not exists analytics_events_name_created_idx on public.analytics_events(event_name,created_at desc);
 alter table public.analytics_events enable row level security;
 -- Kein direkter anonymer Tabellenzugriff; Schreib-/Lesezugriff erfolgt nur über Edge Functions.
+
+-- V46: Öffentlicher Bucket für austauschbare Website-Referenzbilder.
+-- Schreibzugriff erfolgt ausschließlich über die Admin Edge Function mit Service-Role.
+insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
+values (
+  'site-assets',
+  'site-assets',
+  true,
+  8388608,
+  array['image/jpeg','image/png','image/webp']
+)
+on conflict (id) do update set
+  public=true,
+  file_size_limit=excluded.file_size_limit,
+  allowed_mime_types=excluded.allowed_mime_types;

@@ -19,3 +19,10 @@ V11 Änderungen:
 - Graues Hero-Fenster neben dem Maskottchen entfernt.
 - Fehler/Störungen im Kontaktbereich visuell bereinigt.
 - Getippte Buchstaben bekommen jetzt einen kurzen bunten Effekt für ca. 1 Sekunde, ohne dass das gesamte Feld blinkt oder verschwindet.
+
+V46 ERGÄNZUNG
+- Referenzbereich nutzt jetzt drei echte Website-Beispielbilder (Floristik, Handwerk, Shop).
+- Referenzbilder können nach einmaligem Supabase-Setup im Adminbereich ausgetauscht werden.
+- Neuer öffentlicher Storage-Bucket: site-assets.
+- Neue Edge Function: admin-reference-image.
+- Mobile Admin-Seite überschreibt die V43-Fixed-Body-Regel, damit der Adminbereich auf iPhone normal scrollt.

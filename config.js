@@ -10,5 +10,7 @@ window.ERSTELLI_CONFIG = {
   analyticsFunction: "track-event",
   analyticsReportFunction: "analytics-report",
   completeOrderFunction: "complete-order",
+  referenceAdminFunction: "admin-reference-image",
+  referenceAssetBucket: "site-assets",
   analyticsEnabled: true
 };

@@ -556,3 +556,32 @@ document.querySelectorAll('.choice').forEach(el=>{
     document.addEventListener('erstelli:request-error',()=>track('request_submit_error',{section:'kontakt'}));
   }
 })();
+
+// V46 — Referenzbilder optional aus Supabase laden.
+// Ohne Backend-Setup bleiben automatisch die mitgelieferten lokalen Bilder sichtbar.
+(function(){
+  const cfg=window.ERSTELLI_CONFIG||{};
+  const images=[...document.querySelectorAll('.reference-live-image[data-reference-slot]')];
+  if(!images.length||!cfg.supabaseUrl||!cfg.referenceAssetBucket)return;
+
+  const base=`${cfg.supabaseUrl}/storage/v1/object/public/${encodeURIComponent(cfg.referenceAssetBucket)}`;
+  const manifestUrl=`${base}/references/manifest.json?t=${Date.now()}`;
+
+  fetch(manifestUrl,{cache:'no-store'})
+    .then(r=>r.ok?r.json():null)
+    .then(manifest=>{
+      if(!manifest||typeof manifest!=='object')return;
+      images.forEach(img=>{
+        const slot=img.dataset.referenceSlot;
+        const entry=manifest[slot];
+        if(!entry?.updatedAt)return;
+        const fallback=img.dataset.fallback||img.getAttribute('src');
+        img.onerror=()=>{
+          img.onerror=null;
+          img.src=fallback;
+        };
+        img.src=`${base}/references/${encodeURIComponent(slot)}?v=${encodeURIComponent(entry.updatedAt)}`;
+      });
+    })
+    .catch(()=>{});
+})();

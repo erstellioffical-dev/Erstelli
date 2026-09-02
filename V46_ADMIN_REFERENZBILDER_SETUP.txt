@@ -1,0 +1,32 @@
+ERSTELLI V46 – REFERENZBILDER IM ADMIN AUSTAUSCHEN
+====================================================
+
+Die Website enthält bereits drei neue lokale Beispielbilder:
+- Floristik / Blumenladen
+- Handwerksbetrieb
+- Online-Shop
+
+Damit du diese später direkt unter /admin.html ersetzen kannst, sind zwei EINMALIGE Supabase-Schritte nötig:
+
+1) SUPABASE SQL EDITOR
+   Inhalt aus backend/reference-assets.sql ausführen.
+   Dadurch wird der öffentliche Bucket "site-assets" angelegt.
+
+2) EDGE FUNCTION DEPLOYEN
+   Neue Function: admin-reference-image
+   Quellcode: backend/functions/admin-reference-image/index.ts
+
+   Es sind keine neuen Secrets nötig.
+   Die Function verwendet dein bereits vorhandenes ERSTELLI_ADMIN_SECRET.
+
+Danach:
+- https://erstelli.com/admin.html öffnen
+- Admin-Passwort eingeben
+- unten bei "Referenzbilder" ein neues JPG/PNG/WebP wählen
+- "Bild ersetzen" drücken
+
+Das neue Bild wird in Supabase gespeichert und erscheint automatisch auf der öffentlichen Website.
+Du musst für spätere Bildwechsel NICHT erneut GitHub-Dateien austauschen.
+
+Hinweis:
+Wenn Supabase noch nicht eingerichtet/deployed ist, zeigt die Website trotzdem immer die drei mitgelieferten Standardbilder aus assets/references/ an.
